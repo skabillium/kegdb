@@ -9,6 +9,7 @@ install:
 	go mod download
 
 clean:
+	rm -rf data
 	rm -rf ./bin
 
 tests:
