@@ -4,17 +4,18 @@ import (
 	"errors"
 	"log"
 	"skabillium/kegdb/cmd/keg"
+	"time"
 
 	"github.com/tidwall/resp"
 )
 
 func main() {
-
 	keg := keg.NewKegDB()
-	err := keg.OpenActiveFile()
+	err := keg.Open()
 	if err != nil {
 		panic(err)
 	}
+	defer keg.Close()
 
 	server := resp.NewServer()
 
@@ -58,6 +59,12 @@ func main() {
 		}
 		return true
 	})
+
+	server.HandleFunc("quit", func(conn *resp.Conn, args []resp.Value) bool {
+		return false
+	})
+
+	go keg.RunSnapshotJob(1 * time.Minute)
 
 	if err := server.ListenAndServe(":5678"); err != nil {
 		log.Fatal(err)

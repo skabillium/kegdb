@@ -14,6 +14,17 @@ type Header struct {
 	ValueSize uint32
 }
 
+func (h *Header) Encode() []byte {
+	buf := make([]byte, HeaderLength)
+
+	binary.LittleEndian.PutUint32(buf, h.Checksum)
+	binary.LittleEndian.PutUint32(buf, h.Timestamp)
+	binary.LittleEndian.PutUint32(buf, h.KeySize)
+	binary.LittleEndian.PutUint32(buf, h.ValueSize)
+
+	return buf
+}
+
 type Record struct {
 	Header Header
 	Key    string
@@ -34,13 +45,7 @@ func NewRecord(key string, value []byte, timestamp uint32) *Record {
 }
 
 func (r *Record) Encode() ([]byte, error) {
-	buf := make([]byte, HeaderLength)
-
-	binary.LittleEndian.PutUint32(buf, r.Header.Checksum)
-	binary.LittleEndian.PutUint32(buf, r.Header.Timestamp)
-	binary.LittleEndian.PutUint32(buf, r.Header.KeySize)
-	binary.LittleEndian.PutUint32(buf, r.Header.ValueSize)
-
+	buf := r.Header.Encode()
 	buf = append(buf, []byte(r.Key)...)
 	buf = append(buf, r.Value...)
 
