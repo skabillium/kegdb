@@ -36,6 +36,22 @@ func (s *Server) registerHandlers() {
 		return true
 	})
 
+	s.srv.HandleFunc("keys", func(conn *resp.Conn, args []resp.Value) bool {
+		keys, err := s.db.Keys()
+		if err != nil {
+			conn.WriteError(err)
+			return true
+		}
+
+		values := []resp.Value{}
+		for i := 0; i < len(keys); i++ {
+			values = append(values, resp.StringValue(keys[i]))
+		}
+
+		conn.WriteArray(values)
+		return true
+	})
+
 	s.srv.HandleFunc("set", func(conn *resp.Conn, args []resp.Value) bool {
 		if len(args) != 3 {
 			conn.WriteError(errors.New("ERR wrong number of arguments for 'set' command"))

@@ -163,6 +163,25 @@ func (k *Keg) Close() {
 	}
 }
 
+func (k *Keg) readKey(meta KeyMetadata, df *Datafile) (string, error) {
+	buf, err := df.ReadAt(int(int64(meta.offset)+int64(HeaderLength)), int(meta.Header.KeySize))
+	if err != nil {
+		return "", err
+	}
+
+	return string(buf), nil
+}
+
+// Read a value from a datafile
+func (k *Keg) readValue(meta KeyMetadata, df *Datafile) ([]byte, error) {
+	buf, err := df.ReadAt(int(int64(meta.offset)+int64(HeaderLength)+int64(meta.Header.KeySize)), int(meta.Header.ValueSize))
+	if err != nil {
+		return nil, err
+	}
+
+	return buf, nil
+}
+
 // Write a record to the active file
 func (k *Keg) writeRecord(rec *Record) error {
 	encoded, err := rec.Encode()
@@ -186,6 +205,19 @@ func (k *Keg) writeRecord(rec *Record) error {
 	k.keys[rec.Key] = KeyMetadata{Header: rec.Header, offset: offset}
 
 	return nil
+}
+
+func (k *Keg) getDatafile(id int) (*Datafile, bool) {
+	df, found := k.stale[id]
+	if found {
+		return df, found
+	}
+
+	if k.active.id == id {
+		return k.active, true
+	}
+
+	return nil, false
 }
 
 func (k *Keg) RunSnapshotJob(interval time.Duration) {

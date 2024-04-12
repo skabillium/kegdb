@@ -7,7 +7,22 @@ func (k *Keg) Reindex() error {
 }
 
 func (k *Keg) Keys() ([]string, error) {
-	return nil, nil
+	keys := []string{}
+	for _, meta := range k.keys {
+		df, found := k.getDatafile(meta.fileId)
+		if !found {
+			continue
+		}
+
+		key, err := k.readKey(meta, df)
+		if err != nil {
+			continue
+		}
+
+		keys = append(keys, key)
+	}
+
+	return keys, nil
 }
 
 func (k *Keg) Put(key string, value string) error {
@@ -36,7 +51,7 @@ func (k *Keg) Get(key string) (string, bool, error) {
 		}
 	}
 
-	buf, err := df.ReadAt(int(int64(meta.offset)+int64(HeaderLength)+int64(meta.Header.KeySize)), int(meta.Header.ValueSize))
+	buf, err := k.readValue(meta, df)
 	if err != nil {
 		return "", true, err
 	}
