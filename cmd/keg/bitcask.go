@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"hash/crc32"
 )
 
@@ -84,8 +83,6 @@ func DecodeRecord(r *bufio.Reader) (*Record, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	fmt.Println(header)
 
 	valueBytes := make([]byte, int(header.ValueSize))
 	_, err = r.Read(valueBytes)

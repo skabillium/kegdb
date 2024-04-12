@@ -15,16 +15,18 @@ type Datafile struct {
 	id     int
 }
 
-func NewDatafile(id int) (*Datafile, error) {
+func NewDatafile(id int, stale bool) (*Datafile, error) {
 	datafile := &Datafile{}
 
 	filepath := fmt.Sprintf(FileFmt, id)
 
-	write, err := os.OpenFile(filepath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return nil, err
+	if !stale {
+		write, err := os.OpenFile(filepath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return nil, err
+		}
+		datafile.writer = write
 	}
-	datafile.writer = write
 
 	reader, err := os.Open(filepath)
 	if err != nil {
@@ -65,7 +67,9 @@ func (d *Datafile) HasCapacity(n int) bool {
 
 func (d *Datafile) Close() {
 	d.reader.Close()
-	d.CloseWriter()
+	if d.writer != nil {
+		d.CloseWriter()
+	}
 }
 
 func (d *Datafile) CloseWriter() {

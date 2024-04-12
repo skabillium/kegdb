@@ -28,8 +28,7 @@ type Keg struct {
 	active    *Datafile
 	stale     map[int]*Datafile
 
-	offset int
-	keys   KeyDir
+	keys KeyDir
 }
 
 func NewKegDB() *Keg {
@@ -76,11 +75,10 @@ func (k *Keg) buildDbFromDatafiles() error {
 			return err
 		}
 
-		df, err := NewDatafile(id)
+		df, err := NewDatafile(id, true)
 		if err != nil {
 			panic(err)
 		}
-		df.CloseWriter()
 
 		k.stale[id] = df
 
@@ -149,7 +147,7 @@ func (k *Keg) Open() error {
 	}
 
 	next := getNextFileId()
-	active, err := NewDatafile(next)
+	active, err := NewDatafile(next, false)
 	if err != nil {
 		panic(err)
 	}
@@ -165,6 +163,7 @@ func (k *Keg) Close() {
 	}
 }
 
+// Write a record to the active file
 func (k *Keg) writeRecord(rec *Record) error {
 	encoded, err := rec.Encode()
 	if err != nil {
@@ -173,9 +172,11 @@ func (k *Keg) writeRecord(rec *Record) error {
 
 	// TODO: Handle case of key bigger than FileSizeLimit
 	if !k.active.HasCapacity(len(encoded)) {
+		k.active.CloseWriter()
 		k.stale[k.active.id] = k.active
+
 		k.currentId++
-		active, err := NewDatafile(k.currentId)
+		active, err := NewDatafile(k.currentId, false)
 		if err != nil {
 			panic(err) // TODO: Handle this differently
 		}
