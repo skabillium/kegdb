@@ -19,6 +19,16 @@ func main() {
 
 	server := resp.NewServer()
 
+	server.HandleFunc("info", func(conn *resp.Conn, args []resp.Value) bool {
+		conn.WriteSimpleString("KegDB version 0.0.1")
+		return true
+	})
+
+	server.HandleFunc("reindex", func(conn *resp.Conn, args []resp.Value) bool {
+		conn.WriteSimpleString("TODO: Implement 'reindex' command")
+		return true
+	})
+
 	server.HandleFunc("set", func(conn *resp.Conn, args []resp.Value) bool {
 		if len(args) != 3 {
 			conn.WriteError(errors.New("ERR wrong number of arguments for 'set' command"))
@@ -57,6 +67,9 @@ func main() {
 			conn.WriteError(errors.New("ERR wrong number of arguments for 'get' command"))
 			return true
 		}
+
+		keg.Delete(args[1].String())
+
 		return true
 	})
 

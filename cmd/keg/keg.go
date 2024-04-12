@@ -1,9 +1,11 @@
 package keg
 
 import (
+	"bufio"
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -16,7 +18,6 @@ import (
 
 const DataDir = "data"
 const SnapshotFile = DataDir + "/snapshot.gob"
-const DatabaseFile = DataDir + "/active.keg"
 
 const FileSizeLimit = 512 * 1024 // Set maximum file size to 512kb
 
@@ -63,6 +64,10 @@ func listDataFiles() ([]string, error) {
 	}
 
 	return files, nil
+}
+
+func now() uint32 {
+	return uint32(time.Now().Unix())
 }
 
 func getNextFileId() int {
@@ -112,7 +117,7 @@ func getFileIdFromName(name string) int {
 	split := strings.Split(name, ".")
 	id, err := strconv.Atoi(split[0][len("keg-"):])
 	if err != nil {
-		panic(err)
+		return -1
 	}
 	return id
 }
@@ -123,6 +128,16 @@ func (k *Keg) buildDbFromDatafiles() error {
 		return err
 	}
 
+	if len(files) == 0 {
+		return nil
+	}
+
+	// Sort files based on id
+	sort.Slice(files, func(i, j int) bool {
+		return getFileIdFromName(files[i]) < getFileIdFromName(files[j])
+	})
+
+	fmt.Printf("Restoring database from %d data files... \n", len(files))
 	for _, f := range files {
 		id := getFileIdFromName(f)
 		name := DataDir + "/" + f
@@ -140,33 +155,27 @@ func (k *Keg) buildDbFromDatafiles() error {
 		k.stale[id] = df
 
 		var offset int
+		reader := bufio.NewReader(file)
 		for {
-			headerBytes := make([]byte, HeaderLength)
-			_, err := file.Read(headerBytes)
+			record, err := DecodeRecord(reader)
 			if err != nil {
-				return err
+				if err == io.EOF {
+					break
+				}
+				panic(err)
 			}
 
-			header := DecodeHeader(headerBytes)
-			totalSize := HeaderLength + header.KeySize + header.ValueSize
-
-			keyBytes := make([]byte, int(header.KeySize))
-			_, err = file.Read(keyBytes)
-			if err != nil {
-				return err
+			// TODO: Refactor this
+			meta, found := k.keys[record.Key]
+			if !found || (found && meta.Header.Timestamp < record.Header.Timestamp) {
+				k.keys[record.Key] = KeyMetadata{Header: record.Header, offset: offset, fileId: id}
 			}
 
-			valueBytes := make([]byte, int(header.ValueSize))
-			_, err = file.Read(valueBytes)
-			if err != nil {
-				return err
+			if record.Header.IsDeleted {
+				delete(k.keys, record.Key)
 			}
 
-			key := string(keyBytes)
-
-			// TODO: Only update if the timestamp is more recent
-			k.keys[key] = KeyMetadata{Header: *header, offset: offset, fileId: id}
-			offset += int(totalSize)
+			offset += HeaderLength + int(record.Header.KeySize) + int(record.Header.ValueSize)
 		}
 	}
 
@@ -196,7 +205,18 @@ func (k *Keg) Open() error {
 		}
 	}
 
-	k.buildDbFromDatafiles()
+	if fileExists(SnapshotFile) {
+		fmt.Println("Snapshot file found")
+		err := k.loadSnapshot()
+		if err != nil {
+			return err
+		}
+	} else {
+		err := k.buildDbFromDatafiles()
+		if err != nil {
+			return err
+		}
+	}
 
 	next := getNextFileId()
 	active, err := NewDatafile(next)
@@ -204,14 +224,6 @@ func (k *Keg) Open() error {
 		panic(err)
 	}
 	k.active = active
-
-	if fileExists(SnapshotFile) {
-		fmt.Println("Snapshot file found")
-		err = k.loadSnapshot()
-		if err != nil {
-			return err
-		}
-	}
 
 	return nil
 }
@@ -223,9 +235,22 @@ func (k *Keg) Close() {
 	}
 }
 
+func (k *Keg) Reindex() error {
+	return nil
+}
+
 func (k *Keg) Set(key string, value string) error {
-	record := NewRecord(key, []byte(value), uint32(time.Now().Unix()))
-	encoded, err := record.Encode()
+	rec := NewRecord(key, []byte(value), uint32(time.Now().Unix()))
+	err := k.writeRecord(rec)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (k *Keg) writeRecord(rec *Record) error {
+	encoded, err := rec.Encode()
 	if err != nil {
 		return err
 	}
@@ -240,12 +265,9 @@ func (k *Keg) Set(key string, value string) error {
 		}
 		k.active = active
 	}
-
 	offset := k.active.Write(encoded)
+	k.keys[rec.Key] = KeyMetadata{Header: rec.Header, offset: offset}
 
-	k.keys[key] = KeyMetadata{Header: record.Header, offset: offset}
-
-	k.offset += len(encoded)
 	return nil
 }
 
@@ -265,7 +287,7 @@ func (k *Keg) Get(key string) (string, error) {
 		}
 	}
 
-	buf, err := df.ReadAt(int(int64(meta.offset)+HeaderLength+int64(meta.Header.KeySize)), int(meta.Header.ValueSize))
+	buf, err := df.ReadAt(int(int64(meta.offset)+int64(HeaderLength)+int64(meta.Header.KeySize)), int(meta.Header.ValueSize))
 	if err != nil {
 		return "", err
 	}
@@ -275,8 +297,22 @@ func (k *Keg) Get(key string) (string, error) {
 	return string(buf), nil
 }
 
-func (k *Keg) Delete(key string) {
+func (k *Keg) Delete(key string) (bool, error) {
+	// Write a tombstone
+	_, found := k.keys[key]
+	if !found {
+		return false, nil
+	}
+
+	rec := NewRecord(key, []byte{}, now())
+	rec.Header.IsDeleted = true
+	err := k.writeRecord(rec)
+	if err != nil {
+		return true, err
+	}
 	delete(k.keys, key)
+
+	return true, nil
 }
 
 func (k *Keg) RunSnapshotJob(interval time.Duration) {

@@ -1,16 +1,22 @@
 package keg
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"hash/crc32"
 )
 
-const HeaderLength = 4 * 4
+const HeaderLength = 4*4 + 1
+
+var ErrInvalidChecksum = errors.New("ERR record has invalid checksum")
 
 type Header struct {
 	Checksum  uint32
 	Timestamp uint32
+	IsDeleted bool
 	KeySize   uint32
 	ValueSize uint32
 }
@@ -63,4 +69,34 @@ func (r *Record) Encode() ([]byte, error) {
 	}
 
 	return buf.Bytes(), nil
+}
+
+func DecodeRecord(r *bufio.Reader) (*Record, error) {
+	headerBytes := make([]byte, HeaderLength)
+	_, err := r.Read(headerBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	header := DecodeHeader(headerBytes)
+	keyBytes := make([]byte, int(header.KeySize))
+	_, err = r.Read(keyBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Println(header)
+
+	valueBytes := make([]byte, int(header.ValueSize))
+	_, err = r.Read(valueBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	record := NewRecord(string(keyBytes), valueBytes, header.Timestamp)
+	if record.Header.Checksum != header.Checksum {
+		return nil, ErrInvalidChecksum
+	}
+
+	return record, nil
 }
