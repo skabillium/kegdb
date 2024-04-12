@@ -1,6 +1,7 @@
 package keg
 
 import (
+	"bytes"
 	"encoding/binary"
 	"hash/crc32"
 )
@@ -14,15 +15,15 @@ type Header struct {
 	ValueSize uint32
 }
 
-func (h *Header) Encode() []byte {
-	buf := make([]byte, HeaderLength)
+func (h *Header) Encode(buf *bytes.Buffer) error {
+	return binary.Write(buf, binary.LittleEndian, h)
+}
 
-	binary.LittleEndian.PutUint32(buf, h.Checksum)
-	binary.LittleEndian.PutUint32(buf, h.Timestamp)
-	binary.LittleEndian.PutUint32(buf, h.KeySize)
-	binary.LittleEndian.PutUint32(buf, h.ValueSize)
+func DecodeHeader(b []byte) *Header {
+	header := &Header{}
+	binary.Read(bytes.NewReader(b), binary.LittleEndian, header)
 
-	return buf
+	return header
 }
 
 type Record struct {
@@ -45,9 +46,21 @@ func NewRecord(key string, value []byte, timestamp uint32) *Record {
 }
 
 func (r *Record) Encode() ([]byte, error) {
-	buf := r.Header.Encode()
-	buf = append(buf, []byte(r.Key)...)
-	buf = append(buf, r.Value...)
+	var buf bytes.Buffer
+	err := r.Header.Encode(&buf)
+	if err != nil {
+		return nil, err
+	}
 
-	return buf, nil
+	err = binary.Write(&buf, binary.LittleEndian, []byte(r.Key))
+	if err != nil {
+		return nil, err
+	}
+
+	err = binary.Write(&buf, binary.LittleEndian, r.Value)
+	if err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
 }
