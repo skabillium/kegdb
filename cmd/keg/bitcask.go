@@ -9,7 +9,7 @@ import (
 	"hash/crc32"
 )
 
-const HeaderLength = 4*4 + 1
+const HeaderLength = 4*4 + 1 // Booleans are encoded as a single byte
 
 var ErrInvalidChecksum = errors.New("ERR record has invalid checksum")
 

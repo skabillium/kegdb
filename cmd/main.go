@@ -35,7 +35,7 @@ func main() {
 			return true
 		}
 
-		err = keg.Set(args[1].String(), args[2].String())
+		err = keg.Put(args[1].String(), args[2].String())
 		if err != nil {
 			conn.WriteError(err)
 			return true
@@ -51,14 +51,18 @@ func main() {
 			return true
 		}
 
-		value, err := keg.Get(args[1].String())
+		value, found, err := keg.Get(args[1].String())
 		if err != nil {
 			conn.WriteError(err)
 			return true
 		}
 
-		conn.WriteString(value)
+		if !found {
+			conn.WriteNull()
+			return true
+		}
 
+		conn.WriteString(value)
 		return true
 	})
 
@@ -68,8 +72,18 @@ func main() {
 			return true
 		}
 
-		keg.Delete(args[1].String())
+		deleted, err := keg.Delete(args[1].String())
+		if err != nil {
+			conn.WriteError(err)
+			return true
+		}
 
+		var out int
+		if deleted {
+			out = 1
+		}
+
+		conn.WriteInteger(out)
 		return true
 	})
 
