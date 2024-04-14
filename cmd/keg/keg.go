@@ -108,6 +108,79 @@ func (k *Keg) buildDbFromDatafiles() error {
 	return nil
 }
 
+// Merge stale data files to one
+func (k *Keg) Merge() error {
+	tmp, err := os.OpenFile("tmp.db", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+
+	var offset int
+	k.currentId = 1
+	for key, meta := range k.keys {
+		df, found := k.getDatafile(meta.fileId)
+		if !found {
+			return fmt.Errorf("Could not find file '%s'", fmt.Sprintf(FileFmt, meta.fileId))
+		}
+
+		rec, err := df.ReadRecord(meta.offset)
+		if err != nil {
+			return err
+		}
+
+		encoded, err := rec.Encode()
+		if err != nil {
+			return err
+		}
+
+		n, err := tmp.Write(encoded)
+		if err != nil {
+			return err
+		}
+
+		meta.offset = offset
+		meta.fileId = 1
+		k.keys[key] = meta
+
+		offset += n
+	}
+
+	tmp.Close()
+	k.stale = make(map[int]*Datafile)
+	k.active = nil
+	k.currentId = 1
+
+	err = os.RemoveAll(DataDir)
+	if err != nil {
+		return err
+	}
+
+	err = os.Mkdir(DataDir, 0755)
+	if err != nil {
+		return err
+	}
+
+	err = os.Rename("tmp.db", DataDir+"/keg-1.db")
+	if err != nil {
+		return err
+	}
+
+	first, err := NewDatafile(1, true)
+	if err != nil {
+		return err
+	}
+
+	k.stale[first.id] = first
+
+	k.currentId++
+	k.active, err = NewDatafile(k.currentId, false)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (k *Keg) loadSnapshot() error {
 	snap, err := os.Open(SnapshotFile)
 	if err != nil {

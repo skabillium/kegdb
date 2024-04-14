@@ -30,18 +30,18 @@ func (s *Server) registerHandlers() {
 		return true
 	})
 
-	s.srv.HandleFunc("reindex", func(conn *resp.Conn, args []resp.Value) bool {
-		conn.WriteSimpleString("TODO: Implement 'reindex' command")
-		return true
-	})
-
-	s.srv.HandleFunc("keys", func(conn *resp.Conn, args []resp.Value) bool {
-		keys, err := s.db.Keys()
+	s.srv.HandleFunc("index", func(conn *resp.Conn, args []resp.Value) bool {
+		err := s.db.Index()
 		if err != nil {
 			conn.WriteError(err)
 			return true
 		}
+		conn.WriteSimpleString("OK")
+		return true
+	})
 
+	s.srv.HandleFunc("keys", func(conn *resp.Conn, args []resp.Value) bool {
+		keys := s.db.Keys()
 		values := []resp.Value{}
 		for i := 0; i < len(keys); i++ {
 			values = append(values, resp.StringValue(keys[i]))

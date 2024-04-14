@@ -1,28 +1,21 @@
 package keg
 
-import "time"
+import (
+	"time"
+)
 
-func (k *Keg) Reindex() error {
+func (k *Keg) Index() error {
+	k.Close()
+	k.buildDbFromDatafiles()
 	return nil
 }
 
-func (k *Keg) Keys() ([]string, error) {
+func (k *Keg) Keys() []string {
 	keys := []string{}
-	for _, meta := range k.keys {
-		df, found := k.getDatafile(meta.fileId)
-		if !found {
-			continue
-		}
-
-		key, err := k.readKey(meta, df)
-		if err != nil {
-			continue
-		}
-
+	for key := range k.keys {
 		keys = append(keys, key)
 	}
-
-	return keys, nil
+	return keys
 }
 
 func (k *Keg) Put(key string, value string) error {

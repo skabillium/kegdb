@@ -31,6 +31,7 @@ func NewDatafile(id int, stale bool) (*Datafile, error) {
 		return nil, err
 	}
 	datafile.reader = reader
+	datafile.id = id
 
 	return datafile, nil
 }
