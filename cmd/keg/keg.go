@@ -1,7 +1,6 @@
 package keg
 
 import (
-	"bufio"
 	"encoding/gob"
 	"fmt"
 	"io"
@@ -83,9 +82,8 @@ func (k *Keg) buildDbFromDatafiles() error {
 		k.stale[id] = df
 
 		var offset int
-		reader := bufio.NewReader(file)
 		for {
-			record, err := DecodeRecord(reader)
+			record, err := DecodeRecord(file)
 			if err != nil {
 				if err == io.EOF {
 					break
@@ -208,13 +206,13 @@ func (k *Keg) writeRecord(rec *Record) error {
 }
 
 func (k *Keg) getDatafile(id int) (*Datafile, bool) {
+	if k.active.id == id {
+		return k.active, true
+	}
+
 	df, found := k.stale[id]
 	if found {
 		return df, found
-	}
-
-	if k.active.id == id {
-		return k.active, true
 	}
 
 	return nil, false

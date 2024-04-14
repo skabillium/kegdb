@@ -1,11 +1,11 @@
 package keg
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/binary"
 	"errors"
 	"hash/crc32"
+	"io"
 )
 
 const HeaderLength = 4*4 + 1 // Booleans are encoded as a single byte
@@ -70,7 +70,7 @@ func (r *Record) Encode() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func DecodeRecord(r *bufio.Reader) (*Record, error) {
+func DecodeRecord(r io.Reader) (*Record, error) {
 	headerBytes := make([]byte, HeaderLength)
 	_, err := r.Read(headerBytes)
 	if err != nil {

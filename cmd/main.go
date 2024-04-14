@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"skabillium/kegdb/cmd/keg"
-	"time"
 
 	"github.com/tidwall/resp"
 )
@@ -52,9 +51,9 @@ func (s *Server) registerHandlers() {
 		return true
 	})
 
-	s.srv.HandleFunc("set", func(conn *resp.Conn, args []resp.Value) bool {
+	s.srv.HandleFunc("put", func(conn *resp.Conn, args []resp.Value) bool {
 		if len(args) != 3 {
-			conn.WriteError(errors.New("ERR wrong number of arguments for 'set' command"))
+			conn.WriteError(errors.New("ERR wrong number of arguments for 'put' command"))
 			return true
 		}
 
@@ -124,8 +123,8 @@ func (s *Server) Start() error {
 
 	s.registerHandlers()
 
-	go s.db.RunSnapshotJob(1 * time.Minute)
-	fmt.Println("Started snapshot job")
+	// go s.db.RunSnapshotJob(1 * time.Minute)
+	// fmt.Println("Started snapshot job")
 
 	fmt.Println("KeyDB server started at port:", s.port)
 	if err = s.srv.ListenAndServe(":" + s.port); err != nil {

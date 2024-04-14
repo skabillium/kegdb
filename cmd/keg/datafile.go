@@ -16,10 +16,8 @@ type Datafile struct {
 }
 
 func NewDatafile(id int, stale bool) (*Datafile, error) {
-	datafile := &Datafile{}
-
 	filepath := fmt.Sprintf(FileFmt, id)
-
+	datafile := &Datafile{}
 	if !stale {
 		write, err := os.OpenFile(filepath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
@@ -43,6 +41,38 @@ func (d *Datafile) Write(b []byte) int {
 	d.offset += len(b)
 
 	return offset
+}
+
+func (d *Datafile) ReadRecord(offset int) (*Record, error) {
+	_, err := d.reader.Seek(int64(offset), 0)
+	if err != nil {
+		return nil, err
+	}
+
+	rec, err := DecodeRecord(d.reader)
+	if err != nil {
+		return nil, err
+	}
+
+	return rec, nil
+}
+
+func (d *Datafile) ReadKey(meta KeyMetadata) (string, error) {
+	buf := make([]byte, meta.Header.KeySize)
+	_, err := d.reader.ReadAt(buf, int64(meta.offset))
+	if err != nil {
+		return "", err
+	}
+	return string(buf), nil
+}
+
+func (d *Datafile) ReadValue(meta KeyMetadata) ([]byte, error) {
+	buf := make([]byte, meta.Header.ValueSize)
+	_, err := d.reader.ReadAt(buf, int64(meta.offset))
+	if err != nil {
+		return nil, err
+	}
+	return buf, nil
 }
 
 func (d *Datafile) ReadAt(offset int, length int) ([]byte, error) {
