@@ -24,14 +24,14 @@ func fileExists(filepath string) bool {
 }
 
 // List files containing the database data
-func listDataFiles() ([]string, error) {
+func (k *Keg) listDataFiles() ([]string, error) {
 	regex, err := regexp.Compile(`keg-(\d+).db`)
 	if err != nil {
 		return nil, err
 	}
 
 	files := []string{}
-	err = filepath.Walk(DataDir, func(path string, info fs.FileInfo, err error) error {
+	err = filepath.Walk(k.dataDir, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -52,10 +52,10 @@ func listDataFiles() ([]string, error) {
 }
 
 // Get the id for the new active file
-func getNextFileId() int {
+func (k *Keg) getNextFileId() int {
 	ids := []int{}
 
-	files, err := listDataFiles()
+	files, err := k.listDataFiles()
 	if err != nil {
 		panic(err)
 	}

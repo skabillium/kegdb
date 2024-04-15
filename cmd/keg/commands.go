@@ -1,14 +1,10 @@
 package keg
 
 import (
+	"fmt"
+	"os"
 	"time"
 )
-
-func (k *Keg) Index() error {
-	k.Close()
-	k.buildDbFromDatafiles()
-	return nil
-}
 
 func (k *Keg) Keys() []string {
 	keys := []string{}
@@ -44,7 +40,7 @@ func (k *Keg) Get(key string) (string, bool, error) {
 		}
 	}
 
-	buf, err := k.readValue(meta, df)
+	buf, err := df.ReadValue(meta)
 	if err != nil {
 		return "", true, err
 	}
@@ -70,4 +66,88 @@ func (k *Keg) Delete(key string) (bool, error) {
 	delete(k.keys, key)
 
 	return true, nil
+}
+
+func (k *Keg) Index() error {
+	k.Close()
+	k.buildDbFromDatafiles()
+	return nil
+}
+
+// Merge stale data files to one
+func (k *Keg) Merge() error {
+	tempName := "keg-tmp.db"
+	tmp, err := os.OpenFile(tempName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+
+	k.currentId = 1
+	var offset int
+	for key, meta := range k.keys {
+		df, found := k.getDatafile(meta.fileId)
+		if !found {
+			return fmt.Errorf("Could not find file '%s'", fmt.Sprintf(k.dataDir+"/keg-%d.db", meta.fileId))
+		}
+
+		rec, err := df.ReadRecord(meta.offset)
+		if err != nil {
+			return err
+		}
+
+		// TODO: Remove this
+		if rec.Header.IsDeleted {
+			continue
+		}
+
+		encoded, err := rec.Encode()
+		if err != nil {
+			return err
+		}
+
+		n, err := tmp.Write(encoded)
+		if err != nil {
+			return err
+		}
+
+		meta.offset = offset
+		meta.fileId = k.currentId
+		k.keys[key] = meta
+
+		offset += n
+	}
+
+	tmp.Close()
+	k.stale = make(map[int]*Datafile)
+	k.active = nil
+
+	err = os.RemoveAll(k.dataDir)
+	if err != nil {
+		return err
+	}
+
+	err = os.Mkdir(k.dataDir, 0755)
+	if err != nil {
+		return err
+	}
+
+	err = os.Rename(tempName, k.dataDir+"/keg-1.db")
+	if err != nil {
+		return err
+	}
+
+	first, err := NewDatafile(k.dataDir, 1, true)
+	if err != nil {
+		return err
+	}
+
+	k.stale[first.id] = first
+
+	k.currentId++
+	k.active, err = NewDatafile(k.dataDir, k.currentId, false)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

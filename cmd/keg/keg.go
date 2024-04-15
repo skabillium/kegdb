@@ -9,9 +9,6 @@ import (
 	"time"
 )
 
-const DataDir = "data"
-const SnapshotFile = DataDir + "/snapshot.gob"
-
 const FileSizeLimit = 512 * 1024 // Set maximum file size to 512kb
 
 type KeyMetadata struct {
@@ -23,19 +20,26 @@ type KeyMetadata struct {
 type KeyDir map[string]KeyMetadata
 
 type Keg struct {
+	dataDir      string
+	snapshotFile string
+
 	currentId int
 	active    *Datafile
 	stale     map[int]*Datafile
-
-	keys KeyDir
+	keys      KeyDir
 }
 
-func NewKegDB() *Keg {
-	return &Keg{keys: KeyDir{}, stale: map[int]*Datafile{}}
+func NewKegDB(dataDir string) *Keg {
+	return &Keg{
+		keys:         KeyDir{},
+		stale:        map[int]*Datafile{},
+		dataDir:      dataDir,
+		snapshotFile: dataDir + "/snapshot.gob",
+	}
 }
 
 func (k *Keg) saveSnapshot() error {
-	snap, err := os.Create(SnapshotFile)
+	snap, err := os.Create(k.snapshotFile)
 	if err != nil {
 		return err
 	}
@@ -51,7 +55,7 @@ func (k *Keg) saveSnapshot() error {
 }
 
 func (k *Keg) buildDbFromDatafiles() error {
-	files, err := listDataFiles()
+	files, err := k.listDataFiles()
 	if err != nil {
 		return err
 	}
@@ -68,13 +72,13 @@ func (k *Keg) buildDbFromDatafiles() error {
 	fmt.Printf("Restoring database from %d data files... \n", len(files))
 	for _, f := range files {
 		id := getFileIdFromName(f)
-		name := DataDir + "/" + f
+		name := k.dataDir + "/" + f
 		file, err := os.Open(name)
 		if err != nil {
 			return err
 		}
 
-		df, err := NewDatafile(id, true)
+		df, err := NewDatafile(k.dataDir, id, true)
 		if err != nil {
 			panic(err)
 		}
@@ -108,81 +112,8 @@ func (k *Keg) buildDbFromDatafiles() error {
 	return nil
 }
 
-// Merge stale data files to one
-func (k *Keg) Merge() error {
-	tmp, err := os.OpenFile("tmp.db", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-
-	var offset int
-	k.currentId = 1
-	for key, meta := range k.keys {
-		df, found := k.getDatafile(meta.fileId)
-		if !found {
-			return fmt.Errorf("Could not find file '%s'", fmt.Sprintf(FileFmt, meta.fileId))
-		}
-
-		rec, err := df.ReadRecord(meta.offset)
-		if err != nil {
-			return err
-		}
-
-		encoded, err := rec.Encode()
-		if err != nil {
-			return err
-		}
-
-		n, err := tmp.Write(encoded)
-		if err != nil {
-			return err
-		}
-
-		meta.offset = offset
-		meta.fileId = 1
-		k.keys[key] = meta
-
-		offset += n
-	}
-
-	tmp.Close()
-	k.stale = make(map[int]*Datafile)
-	k.active = nil
-	k.currentId = 1
-
-	err = os.RemoveAll(DataDir)
-	if err != nil {
-		return err
-	}
-
-	err = os.Mkdir(DataDir, 0755)
-	if err != nil {
-		return err
-	}
-
-	err = os.Rename("tmp.db", DataDir+"/keg-1.db")
-	if err != nil {
-		return err
-	}
-
-	first, err := NewDatafile(1, true)
-	if err != nil {
-		return err
-	}
-
-	k.stale[first.id] = first
-
-	k.currentId++
-	k.active, err = NewDatafile(k.currentId, false)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (k *Keg) loadSnapshot() error {
-	snap, err := os.Open(SnapshotFile)
+	snap, err := os.Open(k.snapshotFile)
 	if err != nil {
 		return err
 	}
@@ -197,14 +128,14 @@ func (k *Keg) loadSnapshot() error {
 }
 
 func (k *Keg) Open() error {
-	if !fileExists(DataDir) {
-		err := os.Mkdir(DataDir, 0755)
+	if !fileExists(k.dataDir) {
+		err := os.Mkdir(k.dataDir, 0755)
 		if err != nil {
 			return err
 		}
 	}
 
-	if fileExists(SnapshotFile) {
+	if fileExists(k.snapshotFile) {
 		fmt.Println("Snapshot file found")
 		err := k.loadSnapshot()
 		if err != nil {
@@ -217,8 +148,8 @@ func (k *Keg) Open() error {
 		}
 	}
 
-	next := getNextFileId()
-	active, err := NewDatafile(next, false)
+	next := k.getNextFileId()
+	active, err := NewDatafile(k.dataDir, next, false)
 	if err != nil {
 		panic(err)
 	}
@@ -234,25 +165,6 @@ func (k *Keg) Close() {
 	}
 }
 
-func (k *Keg) readKey(meta KeyMetadata, df *Datafile) (string, error) {
-	buf, err := df.ReadAt(int(int64(meta.offset)+int64(HeaderLength)), int(meta.Header.KeySize))
-	if err != nil {
-		return "", err
-	}
-
-	return string(buf), nil
-}
-
-// Read a value from a datafile
-func (k *Keg) readValue(meta KeyMetadata, df *Datafile) ([]byte, error) {
-	buf, err := df.ReadAt(int(int64(meta.offset)+int64(HeaderLength)+int64(meta.Header.KeySize)), int(meta.Header.ValueSize))
-	if err != nil {
-		return nil, err
-	}
-
-	return buf, nil
-}
-
 // Write a record to the active file
 func (k *Keg) writeRecord(rec *Record) error {
 	encoded, err := rec.Encode()
@@ -266,14 +178,14 @@ func (k *Keg) writeRecord(rec *Record) error {
 		k.stale[k.active.id] = k.active
 
 		k.currentId++
-		active, err := NewDatafile(k.currentId, false)
+		active, err := NewDatafile(k.dataDir, k.currentId, false)
 		if err != nil {
 			panic(err) // TODO: Handle this differently
 		}
 		k.active = active
 	}
 	offset := k.active.Write(encoded)
-	k.keys[rec.Key] = KeyMetadata{Header: rec.Header, offset: offset}
+	k.keys[rec.Key] = KeyMetadata{Header: rec.Header, offset: offset, fileId: k.active.id}
 
 	return nil
 }
