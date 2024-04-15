@@ -2,8 +2,8 @@ package keg
 
 import (
 	"encoding/gob"
-	"fmt"
 	"io"
+	"log"
 	"os"
 	"sort"
 	"time"
@@ -18,6 +18,7 @@ type KeyMetadata struct {
 type KeyDir map[string]KeyMetadata
 
 type Keg struct {
+	log          *log.Logger
 	dataDir      string
 	snapshotFile string
 
@@ -33,6 +34,7 @@ func NewKegDB(dataDir string) *Keg {
 		stale:        map[int]*Datafile{},
 		dataDir:      dataDir,
 		snapshotFile: dataDir + "/snapshot.gob",
+		log:          log.New(os.Stderr, "", log.Ldate|log.Ltime),
 	}
 }
 
@@ -67,7 +69,7 @@ func (k *Keg) buildDbFromDatafiles() error {
 		return getFileIdFromName(files[i]) < getFileIdFromName(files[j])
 	})
 
-	fmt.Printf("Restoring database from %d data files... \n", len(files))
+	k.log.Printf("Restoring database from %d data files... \n", len(files))
 	for _, f := range files {
 		id := getFileIdFromName(f)
 		name := k.dataDir + "/" + f
@@ -111,6 +113,7 @@ func (k *Keg) buildDbFromDatafiles() error {
 }
 
 func (k *Keg) loadSnapshot() error {
+	k.log.Println("Restoring from snapshot")
 	snap, err := os.Open(k.snapshotFile)
 	if err != nil {
 		return err
@@ -134,7 +137,6 @@ func (k *Keg) Open() error {
 	}
 
 	if fileExists(k.snapshotFile) {
-		fmt.Println("Snapshot file found")
 		err := k.loadSnapshot()
 		if err != nil {
 			return err
@@ -211,10 +213,10 @@ func (k *Keg) RunSnapshotJob(interval time.Duration) {
 	for range ticker.C {
 		err := k.saveSnapshot()
 		if err != nil {
-			fmt.Println("Error while saving snapshot:")
-			fmt.Println(err)
+			k.log.Println("Error while saving snapshot:")
+			k.log.Println(err)
 		}
 
-		fmt.Println("Took snapshot")
+		k.log.Println("Took snapshot")
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"skabillium/kegdb/cmd/keg"
 	"time"
@@ -17,6 +18,7 @@ type Server struct {
 
 	srv *resp.Server
 	db  *keg.Keg
+	log *log.Logger
 }
 
 func NewServer(opts *ServerOptions) *Server {
@@ -25,6 +27,7 @@ func NewServer(opts *ServerOptions) *Server {
 		mergeInterval: opts.MergeInterval,
 		srv:           resp.NewServer(),
 		db:            keg.NewKegDB(opts.DataDir),
+		log:           log.New(os.Stderr, "", log.Ldate|log.Ltime),
 	}
 }
 
@@ -145,12 +148,12 @@ func (s *Server) Start() error {
 	s.registerHandlers()
 
 	go s.RunMergeJob(s.mergeInterval)
-	fmt.Println("Started merge job")
+	s.log.Println("Started merge job")
 
 	// go s.db.RunSnapshotJob(1 * time.Minute)
-	// fmt.Println("Started snapshot job")
+	// s.log.Println("Started snapshot job")
 
-	fmt.Println("KeyDB server started at port:", s.port)
+	s.log.Println("KeyDB server started at port:", s.port)
 	if err = s.srv.ListenAndServe(":" + s.port); err != nil {
 		return err
 	}
