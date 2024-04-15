@@ -2,25 +2,29 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"skabillium/kegdb/cmd/keg"
+	"time"
 
 	"github.com/tidwall/resp"
 )
 
 type Server struct {
-	port string
+	port          string
+	mergeInterval time.Duration
 
 	srv *resp.Server
 	db  *keg.Keg
 }
 
-func NewServer(port string) *Server {
+func NewServer(opts *ServerOptions) *Server {
 	return &Server{
-		port: port,
-		srv:  resp.NewServer(),
-		db:   keg.NewKegDB(),
+		port:          opts.Port,
+		mergeInterval: opts.MergeInterval,
+		srv:           resp.NewServer(),
+		db:            keg.NewKegDB(opts.DataDir),
 	}
 }
 
@@ -32,6 +36,16 @@ func (s *Server) registerHandlers() {
 
 	s.srv.HandleFunc("index", func(conn *resp.Conn, args []resp.Value) bool {
 		err := s.db.Index()
+		if err != nil {
+			conn.WriteError(err)
+			return true
+		}
+		conn.WriteSimpleString("OK")
+		return true
+	})
+
+	s.srv.HandleFunc("merge", func(conn *resp.Conn, args []resp.Value) bool {
+		err := s.db.Merge()
 		if err != nil {
 			conn.WriteError(err)
 			return true
@@ -114,6 +128,13 @@ func (s *Server) registerHandlers() {
 	})
 }
 
+func (s *Server) RunMergeJob(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	for range ticker.C {
+		s.db.Merge()
+	}
+}
+
 func (s *Server) Start() error {
 	err := s.db.Open()
 	if err != nil {
@@ -122,6 +143,9 @@ func (s *Server) Start() error {
 	defer s.db.Close()
 
 	s.registerHandlers()
+
+	go s.RunMergeJob(s.mergeInterval)
+	fmt.Println("Started merge job")
 
 	// go s.db.RunSnapshotJob(1 * time.Minute)
 	// fmt.Println("Started snapshot job")
@@ -134,8 +158,48 @@ func (s *Server) Start() error {
 	return nil
 }
 
+type ServerOptions struct {
+	Port          string
+	DataDir       string
+	MergeInterval time.Duration
+}
+
+func getServerOptions() *ServerOptions {
+	options := &ServerOptions{
+		Port:          "5678",
+		DataDir:       "data",
+		MergeInterval: 24 * time.Hour,
+	}
+
+	var (
+		port               string
+		dataDir            string
+		mergeIntervalHours int
+	)
+
+	flag.StringVar(&port, "port", "", "Port to run server")
+	flag.StringVar(&dataDir, "dir", "", "Directory to save data")
+	flag.IntVar(&mergeIntervalHours, "merge-interval", -1, "Interval to run merge job in hours")
+	flag.Parse()
+
+	if port != "" {
+		options.Port = port
+	}
+
+	if dataDir != "" {
+		options.DataDir = dataDir
+	}
+
+	if mergeIntervalHours != -1 {
+		options.MergeInterval = time.Duration(mergeIntervalHours * int(time.Hour))
+	}
+
+	return options
+}
+
 func main() {
-	server := NewServer("5678")
+	opts := getServerOptions()
+	server := NewServer(opts)
 
 	err := server.Start()
 	if err != nil {
