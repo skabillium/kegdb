@@ -34,7 +34,15 @@ func NewDatafile(dataDir string, id int, stale bool) (*Datafile, error) {
 	return datafile, nil
 }
 
-func (d *Datafile) Write(b []byte) int {
+func (d *Datafile) WriteRecord(rec *Record) (int, error) {
+	encoded, err := rec.Encode()
+	if err != nil {
+		return -1, err
+	}
+	return d.write(encoded), nil
+}
+
+func (d *Datafile) write(b []byte) int {
 	d.writer.Write(b)
 	offset := d.offset
 	d.offset += len(b)
@@ -88,10 +96,6 @@ func (d *Datafile) ReadAt(offset int, length int) ([]byte, error) {
 	}
 
 	return buffer, nil
-}
-
-func (d *Datafile) HasCapacity(n int) bool {
-	return d.offset+n <= FileSizeLimit
 }
 
 func (d *Datafile) Close() {

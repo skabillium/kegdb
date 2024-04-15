@@ -9,8 +9,6 @@ import (
 	"time"
 )
 
-const FileSizeLimit = 512 * 1024 // Set maximum file size to 512kb
-
 type KeyMetadata struct {
 	Header Header
 	offset int
@@ -167,26 +165,12 @@ func (k *Keg) Close() {
 
 // Write a record to the active file
 func (k *Keg) writeRecord(rec *Record) error {
-	encoded, err := rec.Encode()
+	offset, err := k.active.WriteRecord(rec)
 	if err != nil {
 		return err
 	}
 
-	// TODO: Handle case of key bigger than FileSizeLimit
-	if !k.active.HasCapacity(len(encoded)) {
-		k.active.CloseWriter()
-		k.stale[k.active.id] = k.active
-
-		k.currentId++
-		active, err := NewDatafile(k.dataDir, k.currentId, false)
-		if err != nil {
-			panic(err) // TODO: Handle this differently
-		}
-		k.active = active
-	}
-	offset := k.active.Write(encoded)
 	k.keys[rec.Key] = KeyMetadata{Header: rec.Header, offset: offset, fileId: k.active.id}
-
 	return nil
 }
 
