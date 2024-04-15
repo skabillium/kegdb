@@ -5,6 +5,8 @@ import (
 	"os"
 )
 
+const FileSizeLimit = 256 * 1024 * 1024 // 256mb
+
 type Datafile struct {
 	reader *os.File
 	writer *os.File
@@ -107,4 +109,8 @@ func (d *Datafile) Close() {
 
 func (d *Datafile) CloseWriter() {
 	d.writer.Close()
+}
+
+func (d *Datafile) HasExceededLimit() bool {
+	return d.offset > FileSizeLimit
 }

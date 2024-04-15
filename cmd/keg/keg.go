@@ -169,8 +169,26 @@ func (k *Keg) writeRecord(rec *Record) error {
 	if err != nil {
 		return err
 	}
-
 	k.keys[rec.Key] = KeyMetadata{Header: rec.Header, offset: offset, fileId: k.active.id}
+
+	if k.active.HasExceededLimit() {
+		err = k.switchActive()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (k *Keg) switchActive() error {
+	k.active.CloseWriter()
+	k.stale[k.active.id] = k.active
+	act, err := NewDatafile(k.dataDir, k.getNextFileId(), false)
+	if err != nil {
+		return err
+	}
+	k.active = act
 	return nil
 }
 
