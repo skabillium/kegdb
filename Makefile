@@ -21,5 +21,5 @@ dev:
 build:
 	go build -o ${BIN} ${CMD}
 
-prod: clean build
+start: clean build
 	${BIN}
