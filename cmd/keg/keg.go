@@ -80,7 +80,7 @@ func (k *Keg) buildDbFromDatafiles() error {
 
 		df, err := NewDatafile(k.dataDir, id, true)
 		if err != nil {
-			panic(err)
+			return err
 		}
 
 		k.stale[id] = df
@@ -92,7 +92,7 @@ func (k *Keg) buildDbFromDatafiles() error {
 				if err == io.EOF {
 					break
 				}
-				panic(err)
+				return err
 			}
 
 			// TODO: Refactor this
@@ -151,7 +151,7 @@ func (k *Keg) Open() error {
 	next := k.getNextFileId()
 	active, err := NewDatafile(k.dataDir, next, false)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	k.active = active
 

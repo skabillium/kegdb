@@ -57,7 +57,7 @@ func (k *Keg) getNextFileId() int {
 
 	files, err := k.listDataFiles()
 	if err != nil {
-		panic(err)
+		return -1
 	}
 
 	if len(files) == 0 {
@@ -68,7 +68,7 @@ func (k *Keg) getNextFileId() int {
 		split := strings.Split(f, ".")
 		id, err := strconv.Atoi(split[0][len("keg-"):])
 		if err != nil {
-			panic(err)
+			return -1
 		}
 
 		ids = append(ids, id)
