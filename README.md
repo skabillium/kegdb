@@ -35,9 +35,9 @@ The following commands are supported:
 - `QUIT`, quit session
 
 To send the commands to the server you can either use a redis client in the language of your choice 
-or connect via TCP and send the commands directly. For example if you're using MacOS connect to the
-server using netcat:
-```sh
+or connect via TCP and send the commands directly. You can use `telnet` (Windows/Linux) or 
+`netcat` (MacOS) like this:
+```
 nc localhost 5678
 > put message "Hello there!"
 ```

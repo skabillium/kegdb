@@ -45,8 +45,6 @@ func (k *Keg) Get(key string) (string, bool, error) {
 		return "", true, err
 	}
 
-	// TODO: Checksum
-
 	return string(buf), true, nil
 }
 
