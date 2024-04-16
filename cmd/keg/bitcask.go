@@ -13,17 +13,19 @@ const HeaderLength = 4*4 + 1 // Booleans are encoded as a single byte
 var ErrInvalidChecksum = errors.New("ERR record has invalid checksum")
 
 type Header struct {
-	Checksum  uint32
-	Timestamp uint32
-	IsDeleted bool
+	Checksum  uint32 // Data validation
+	Timestamp uint32 // Timestamp for internal usage
+	IsDeleted bool   // Deleted flag
 	KeySize   uint32
 	ValueSize uint32
 }
 
+// Encode header to slice of bytes
 func (h *Header) Encode(buf *bytes.Buffer) error {
 	return binary.Write(buf, binary.LittleEndian, h)
 }
 
+// Decode header to slice of bytes
 func DecodeHeader(b []byte) *Header {
 	header := &Header{}
 	binary.Read(bytes.NewReader(b), binary.LittleEndian, header)
@@ -50,6 +52,7 @@ func NewRecord(key string, value []byte, timestamp uint32) *Record {
 	}
 }
 
+// Encode record to slice of bytes
 func (r *Record) Encode() ([]byte, error) {
 	var buf bytes.Buffer
 	err := r.Header.Encode(&buf)
@@ -70,6 +73,7 @@ func (r *Record) Encode() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// Decode a record from a slice of bytes
 func DecodeRecord(r io.Reader) (*Record, error) {
 	headerBytes := make([]byte, HeaderLength)
 	_, err := r.Read(headerBytes)

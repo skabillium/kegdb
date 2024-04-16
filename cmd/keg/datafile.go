@@ -1,7 +1,6 @@
 package keg
 
 import (
-	"errors"
 	"fmt"
 	"hash/crc32"
 	"os"
@@ -86,7 +85,7 @@ func (d *Datafile) ReadValue(meta KeyMetadata) ([]byte, error) {
 
 	// Validate checksum
 	if meta.Header.Checksum != crc32.ChecksumIEEE(buf) {
-		return nil, errors.New("invalid checksum for value")
+		return nil, ErrInvalidChecksum
 	}
 
 	return buf, nil

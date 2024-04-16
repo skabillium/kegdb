@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// Lists all database keys
 func (k *Keg) Keys() []string {
 	keys := []string{}
 	for key := range k.keys {
@@ -14,6 +15,7 @@ func (k *Keg) Keys() []string {
 	return keys
 }
 
+// Upsert a key
 func (k *Keg) Put(key string, value string) error {
 	rec := NewRecord(key, []byte(value), uint32(time.Now().Unix()))
 	err := k.writeRecord(rec)
@@ -24,6 +26,7 @@ func (k *Keg) Put(key string, value string) error {
 	return nil
 }
 
+// Get value by key
 func (k *Keg) Get(key string) (string, bool, error) {
 	meta, found := k.keys[key]
 	if !found {
@@ -48,6 +51,7 @@ func (k *Keg) Get(key string) (string, bool, error) {
 	return string(buf), true, nil
 }
 
+// Delete a value
 func (k *Keg) Delete(key string) (bool, error) {
 	// Write a tombstone
 	_, found := k.keys[key]
@@ -66,6 +70,7 @@ func (k *Keg) Delete(key string) (bool, error) {
 	return true, nil
 }
 
+// Reads all data files and rebuilds indexes
 func (k *Keg) Index() error {
 	k.Close()
 	k.buildDbFromDatafiles()

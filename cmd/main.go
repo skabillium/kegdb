@@ -26,7 +26,7 @@ func NewServer(opts *ServerOptions) *Server {
 		port:          opts.Port,
 		mergeInterval: opts.MergeInterval,
 		srv:           resp.NewServer(),
-		db:            keg.NewKegDB(opts.DataDir),
+		db:            keg.NewKegDB(keg.KegOptions{DataDir: opts.DataDir}),
 		log:           log.New(os.Stderr, "", log.Ldate|log.Ltime),
 	}
 }
